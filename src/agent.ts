@@ -100,10 +100,13 @@ export async function runAgent(config: ScanConfig) {
 
   const systemMsg: Message = { role: "system", content: buildSystemPrompt(config) }
   const configCreds = config.username ? `Credentials configured: username=${config.username}, password=${config.password}. Use for form login only.` : ""
+  const userPrompt = config.user_prompt
+    ? `\n\nAdditional user request (prioritize this):\n${config.user_prompt}`
+    : ""
 
   const userMsg: Message = {
     role: "user",
-    content: "Start scanning " + config.target_url + " for error pages and security header issues.\n\n"
+    content: "Scan " + config.target_url + " for security issues.\n\n"
       + "Step-by-step:\n"
       + "1. Call discover() to find all URLs and entry points\n"
       + "2. Call detect_forms() on the target/login URL to identify the auth type\n"
@@ -116,8 +119,9 @@ export async function runAgent(config: ScanConfig) {
       + "   - 4xx errors, 5xx errors\n"
       + "   - Fake-200 error pages (200 status but error content)\n"
       + "   - HTTP security header issues (use check_headers())\n"
-      + "5. Report everything you find\n\n"
-      + configCreds,
+      + "5. Report everything you find\n"
+      + configCreds
+      + userPrompt,
   }
 
   const messages: Message[] = [systemMsg, userMsg]

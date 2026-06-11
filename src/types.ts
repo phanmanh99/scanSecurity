@@ -72,6 +72,7 @@ export interface ScanConfig {
   concurrency: number
   output_dir: string
   max_iterations: number
+  user_prompt?: string
 }
 
 export type ToolHandler = (args: Record<string, unknown>, ctx: ToolContext) => Promise<string>
