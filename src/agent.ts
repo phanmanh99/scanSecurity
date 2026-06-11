@@ -40,7 +40,17 @@ IMPORTANT - Error Classification Rules (MUST FOLLOW):
 - These are different categories. Never report a 4xx as 5xx or vice versa.
 - Use analyze() result's error_type as the SOURCE OF TRUTH for error classification.
 
-IMPORTANT: When you detect a login form but don't have credentials in config, you MUST ask the user FIRST using ask_user() with kind="credentials" before attempting login.
+IMPORTANT - Handling Authentication:
+1. After discover(), call detect_forms() on the target/login URL to identify the AUTH TYPE.
+2. detect_forms() will tell you if it's: form, oauth, magic_link, token, or none.
+3. Based on auth type:
+   - FORM: Has username/password fields. Get credentials via ask_user(kind="credentials") or from config. Then call login().
+   - OAUTH: Google/Facebook/GitHub login. CANNOT automate. Ask user via ask_user(kind="cookie") to paste a session cookie. Then call login(method="cookie", cookie="...").
+   - MAGIC_LINK: Email-only. CANNOT automate. Ask user for cookie.
+   - TOKEN: API key field. Get token via ask_user(kind="token"). Then call login(method="token", token="...").
+   - NONE: No auth needed. Skip login, scan public pages.
+4. Never try form login on OAuth/magic_link pages — it will fail.
+5. If user provides a cookie, call login(method="cookie", cookie="...") to save it.
 
 INTERACTIVE WITH USER:
 - Use ask_user() when you need information
@@ -63,8 +73,13 @@ RULES:
     if (config.login_url) {
       prompt += `- Login URL: ${config.login_url}\n`
     }
+    prompt += `Only use these for form login. If detect_forms() shows OAuth, ask user for cookie.\n`
   } else {
-    prompt += `\nNOTE: No login credentials in config. If discover() finds a login form, you MUST use ask_user() to get credentials from the user before proceeding.\n`
+    prompt += `\nNOTE: No login credentials in config. After discover() + detect_forms(), use the appropriate ask_user() kind based on auth type:\n`
+    prompt += `- Form login → ask_user(kind="credentials")\n`
+    prompt += `- OAuth/SSO → ask_user(kind="cookie") to get session cookie\n`
+    prompt += `- Token → ask_user(kind="token")\n`
+    prompt += `- No auth → skip login, scan public pages\n`
   }
 
   return prompt
@@ -84,26 +99,25 @@ export async function runAgent(config: ScanConfig) {
   const registry = createRegistry(reporter)
 
   const systemMsg: Message = { role: "system", content: buildSystemPrompt(config) }
-  const hasConfigCredentials = !!(config.username && config.password)
-  const authInstruction = hasConfigCredentials
-    ? "credentials are in config"
-    : "NO credentials in config -- use ask_user() to get them from the user"
-  const credsNote = hasConfigCredentials
-    ? "Credentials are configured: username=" + config.username + ". After discover(), proceed with login."
-    : "No credentials configured. If discover() finds a login form, use ask_user() to ask the user for credentials before proceeding."
+  const configCreds = config.username ? `Credentials configured: username=${config.username}, password=${config.password}. Use for form login only.` : ""
 
   const userMsg: Message = {
     role: "user",
     content: "Start scanning " + config.target_url + " for error pages and security header issues.\n\n"
       + "Step-by-step:\n"
-      + "1. First, call discover() to find all URLs, entry points, and detect if there's a login form\n"
-      + "2. If a login form exists and " + authInstruction + ", then login\n"
-      + "3. After login, crawl and systematically test every URL for:\n"
+      + "1. Call discover() to find all URLs and entry points\n"
+      + "2. Call detect_forms() on the target/login URL to identify the auth type\n"
+      + "3. Auth-aware login:\n"
+      + "   - If auth_type='form': use configured credentials or ask_user(kind='credentials') then login()\n"
+      + "   - If auth_type='oauth'/'magic_link': ask_user(kind='cookie') then login(method='cookie', cookie='...')\n"
+      + "   - If auth_type='token': ask_user(kind='token') then login(method='token', token='...')\n"
+      + "   - If auth_type='none': skip login (public site)\n"
+      + "4. After login, crawl and systematically test every URL for:\n"
       + "   - 4xx errors, 5xx errors\n"
       + "   - Fake-200 error pages (200 status but error content)\n"
       + "   - HTTP security header issues (use check_headers())\n"
-      + "4. Report everything you find\n\n"
-      + credsNote,
+      + "5. Report everything you find\n\n"
+      + configCreds,
   }
 
   const messages: Message[] = [systemMsg, userMsg]

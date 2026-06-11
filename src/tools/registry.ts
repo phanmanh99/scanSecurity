@@ -77,13 +77,16 @@ export function createRegistry(reporter: Reporter): {
 
   register(
     "login",
-    "Log into the target website using form-based authentication. Detects login form automatically.",
+    "Authenticate to the website. Supports form login (username+password), token-based, and cookie injection. Use detect_forms() first to identify the auth type, then choose the right method.",
     {
       type: "object",
       properties: {
-        login_url: { type: "string", description: "Login page URL (default: auto-detect from target)" },
-        username: { type: "string", description: "Login username" },
-        password: { type: "string", description: "Login password" },
+        login_url: { type: "string", description: "Login page URL (default: auto-detect)" },
+        username: { type: "string", description: "Login username (for form login)" },
+        password: { type: "string", description: "Login password (for form login)" },
+        method: { type: "string", enum: ["form", "token", "cookie"], description: "Auth method: form (default), token (API key), cookie (paste session)" },
+        token: { type: "string", description: "API token / bearer token (for method='token')" },
+        cookie: { type: "string", description: "Session cookie string (for method='cookie')" },
       },
       required: [],
     } as any,
