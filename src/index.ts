@@ -1,16 +1,27 @@
 #!/usr/bin/env bun
 import { parseConfig } from "./config"
 import { runAgent } from "./agent"
+import { runTUI } from "./tui"
 
 const args = process.argv.slice(2)
 
-if (args.length === 0 || args.includes("--help") || args.includes("-h")) {
+const hasUrlArg = args.some(a => a === "--url" || a === "-u")
+const showHelp = args.includes("--help") || args.includes("-h")
+
+if (showHelp) {
   const { parseConfig } = await import("./config")
   parseConfig(["--help"])
   process.exit(0)
 }
 
-const config = parseConfig(args)
+let config
+
+if (!hasUrlArg && args.length === 0) {
+  config = await runTUI()
+  if (!config) process.exit(0)
+} else {
+  config = parseConfig(args)
+}
 
 try {
   await runAgent(config)
