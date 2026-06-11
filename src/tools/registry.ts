@@ -5,6 +5,8 @@ import { loginTool } from "./auth"
 import { analyzeTool } from "./analyzer"
 import { generatePayloadTool } from "./payload"
 import { checkHeadersTool } from "./header-scanner"
+import { discoverTool } from "./discover"
+import { askUserTool, detectFormsTool } from "./interactive"
 import { reportTool, Reporter } from "./reporter"
 
 export interface ToolRegistryEntry {
@@ -132,6 +134,55 @@ export function createRegistry(reporter: Reporter): {
       required: ["headers"],
     } as any,
     checkHeadersTool,
+  )
+
+  register(
+    "discover",
+    "Discover URLs and entry points from a host. Checks robots.txt, sitemap.xml, common paths (admin, api, login, etc.), and homepage links. Returns all discovered URLs and detects login forms.",
+    {
+      type: "object",
+      properties: {
+        url: { type: "string", description: "Host URL to discover (default: target URL)" },
+      },
+      required: [],
+    } as any,
+    discoverTool,
+  )
+
+  register(
+    "detect_forms",
+    "Find and analyze all HTML forms on a page. Detects login forms vs regular forms, shows form fields, actions, and methods.",
+    {
+      type: "object",
+      properties: {
+        url: { type: "string", description: "Page URL to scan for forms (default: target URL)" },
+      },
+      required: [],
+    } as any,
+    detectFormsTool,
+  )
+
+  register(
+    "ask_user",
+    "Ask the user a question and get their answer interactively. Use this when you need information from the user, like which credentials to use for login, or confirmation before proceeding.",
+    {
+      type: "object",
+      properties: {
+        question: { type: "string", description: "The question to ask the user" },
+        kind: {
+          type: "string",
+          enum: ["text", "confirm", "choice", "credentials"],
+          description: "Type of input: text (default), confirm (yes/no), choice (pick from options), credentials (username:password)",
+        },
+        options: {
+          type: "array",
+          items: { type: "string" },
+          description: "Choices for 'choice' kind",
+        },
+      },
+      required: ["question"],
+    } as any,
+    askUserTool,
   )
 
   register(

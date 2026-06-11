@@ -10,23 +10,37 @@ function buildSystemPrompt(config: ScanConfig): string {
 TARGET: ${config.target_url}
 
 Your mission:
-1. First, LOGIN if credentials are provided (use the login tool)
-2. CRAWL the website to discover all accessible URLs
-3. TEST each URL with GET requests to check for errors
-4. For forms and API endpoints, also try POST requests
-5. ANALYZE each response to determine if it's an error page
-6. CHECK_HEADERS on each response to find missing/insecure HTTP security headers
-7. REPORT each finding using the report tool
-8. When finished, provide a summary of all findings
+1. First, DISCOVER the host to find all entry points using discover() (checks robots.txt, sitemap, common paths)
+2. DETECT FORMS using detect_forms() on the target to find login forms and input fields
+3. If a login form is found and you need credentials, ASK the user using ask_user() with kind="credentials"
+4. LOGIN with the provided credentials
+5. CRAWL the website to discover more accessible URLs
+6. TEST each URL with GET requests to check for errors
+7. For forms and API endpoints, also try POST requests
+8. ANALYZE each response to determine if it's an error page
+9. CHECK_HEADERS on each response to find missing/insecure HTTP security headers
+10. REPORT each finding using the report tool
+11. When finished, provide a summary of all findings
 
 STRATEGY:
-- Start by calling login() if you have credentials
-- Then crawl() to discover all pages
+- Step 1: ALWAYS call discover() first to find URLs and detect login forms
+- Step 2: If login form found AND no credentials in config, call ask_user() to get credentials from the user
+- Step 3: Call login() to authenticate
+- Step 4: Then crawl() to discover all pages (use the discovered URLs)
 - Use batch_request() to efficiently test multiple URLs at once
 - For each response, call analyze() to check if it's an error
-- For each response, call check_headers() with the headers from the response to audit HTTP security headers
+- For each response, call check_headers() with the headers to audit HTTP security
 - If something looks suspicious (forms, API endpoints, unusual URLs), try POST with generated payloads
 - Report every error and header issue you find
+
+IMPORTANT: When you detect a login form but don't have credentials in config, you MUST ask the user FIRST using ask_user() with kind="credentials" before attempting login.
+
+INTERACTIVE WITH USER:
+- Use ask_user() when you need information
+- For login: ask_user({ question: "Which account to use for login?", kind: "credentials" })
+- For confirmations: ask_user({ question: "...?", kind: "confirm" })
+- For choices: ask_user({ question: "...?", kind: "choice", options: [...] })
+- The user will type their response in the terminal
 
 RULES:
 - Stay on the same domain (${new URL(config.target_url).origin})
@@ -38,10 +52,12 @@ RULES:
 `
 
   if (config.username) {
-    prompt += `\nLOGIN CREDENTIALS:\n- Username: ${config.username}\n- Password: ${config.password}\n`
+    prompt += `\nLOGIN CREDENTIALS (from config):\n- Username: ${config.username}\n- Password: ${config.password}\n`
     if (config.login_url) {
       prompt += `- Login URL: ${config.login_url}\n`
     }
+  } else {
+    prompt += `\nNOTE: No login credentials in config. If discover() finds a login form, you MUST use ask_user() to get credentials from the user before proceeding.\n`
   }
 
   return prompt
@@ -61,16 +77,26 @@ export async function runAgent(config: ScanConfig) {
   const registry = createRegistry(reporter)
 
   const systemMsg: Message = { role: "system", content: buildSystemPrompt(config) }
+  const hasConfigCredentials = !!(config.username && config.password)
+  const authInstruction = hasConfigCredentials
+    ? "credentials are in config"
+    : "NO credentials in config -- use ask_user() to get them from the user"
+  const credsNote = hasConfigCredentials
+    ? "Credentials are configured: username=" + config.username + ". After discover(), proceed with login."
+    : "No credentials configured. If discover() finds a login form, use ask_user() to ask the user for credentials before proceeding."
+
   const userMsg: Message = {
     role: "user",
-    content: `Start scanning ${config.target_url} for error pages and security header issues. ${config.username ? `Login credentials are provided.` : "No login credentials provided - scan public pages only."}
-
-First, ${config.username ? "call login() to authenticate, then" : ""} crawl the website to discover URLs, then systematically test each URL for errors and header issues.
-
-Remember:
-- Look for 4xx errors, 5xx errors, AND fake-200 error pages (pages that return 200 but contain error content)
-- Use check_headers() on every response to audit HTTP security headers (HSTS, CSP, X-Frame-Options, etc.)
-- Report both error pages AND header security issues`,
+    content: "Start scanning " + config.target_url + " for error pages and security header issues.\n\n"
+      + "Step-by-step:\n"
+      + "1. First, call discover() to find all URLs, entry points, and detect if there's a login form\n"
+      + "2. If a login form exists and " + authInstruction + ", then login\n"
+      + "3. After login, crawl and systematically test every URL for:\n"
+      + "   - 4xx errors, 5xx errors\n"
+      + "   - Fake-200 error pages (200 status but error content)\n"
+      + "   - HTTP security header issues (use check_headers())\n"
+      + "4. Report everything you find\n\n"
+      + credsNote,
   }
 
   const messages: Message[] = [systemMsg, userMsg]
