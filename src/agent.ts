@@ -33,6 +33,13 @@ STRATEGY:
 - If something looks suspicious (forms, API endpoints, unusual URLs), try POST with generated payloads
 - Report every error and header issue you find
 
+IMPORTANT - Error Classification Rules (MUST FOLLOW):
+- When analyze() returns error_type like "404", "403", "500", "503" — use that EXACT value when calling report()
+- Do NOT change error_type based on page content. A 404 page mentioning "error" or "exception" is still a 404.
+- 4xx = client errors (bad request, not found, forbidden). 5xx = server errors (internal error, unavailable).
+- These are different categories. Never report a 4xx as 5xx or vice versa.
+- Use analyze() result's error_type as the SOURCE OF TRUTH for error classification.
+
 IMPORTANT: When you detect a login form but don't have credentials in config, you MUST ask the user FIRST using ask_user() with kind="credentials" before attempting login.
 
 INTERACTIVE WITH USER:
